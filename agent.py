@@ -173,6 +173,7 @@ class ExamAgent:
     # чистка тексту від моделі
     def clean_reply(self, text: str) -> str:
         # прибираю latex
+        text = text.replace("\\begin{cases}", "").replace("\\end{cases}", "").replace(" \\\\ ", "\n")
         for token in ("\\(", "\\)", "\\[", "\\]"):
             text = text.replace(token, "")
         text = text.replace("\xa0", " ")
@@ -193,7 +194,7 @@ class ExamAgent:
         return text
 
     # перевірка чи модель не видала якесь сміття
-    def looks_broken(self, text: str) -> bool:
+    def looks_broken(self, text: str, need_question: bool = True) -> bool:
         lower = text.lower()
         if re.search(r"\*{3,}", text):
             return True
@@ -202,7 +203,7 @@ class ExamAgent:
         if "вибачте" in lower:
             return True
         exam_in_progress = self.exam.topic_index > 0 and not self.exam.no_more_topics and not self.exam.finished
-        if exam_in_progress and "?" not in text:
+        if need_question and exam_in_progress and "?" not in text:
             return True
         return False
 
@@ -279,6 +280,11 @@ class ExamAgent:
                 continue
 
             content = self.clean_reply(msg.content or "")
+
+            # текст разом з викликом інструмента теж буває сміттям - тоді просто викидаю його
+            if msg.tool_calls and content and self.looks_broken(content, need_question=False):
+                print(f"[guard] викидаю сміття перед викликом інструмента: {content[:80]!r}")
+                content = ""
 
             assistant = {"role": "assistant", "content": content}
             if msg.tool_calls:
